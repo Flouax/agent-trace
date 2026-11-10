@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 3,
+  "minCindyVersion": "0.1.129",
+  "id": "agent-trace",
+  "name": "轨迹与余额",
+  "description": "右侧栏常驻：按轮看当前对话的缓存命中、token 与费用账本（Claude Code 与 Pi），并粘贴脚本查询各供应商的余额。",
+  "whenToUse": "用户想看当前对话每一轮的输入输出 token、缓存命中率、输出速率、费用与当前上下文大小，或想查看各供应商的余额时使用；入口是右侧栏的「轨迹与余额」页签。",
+  "version": "0.2.0",
+  "releaseNotes": "支持 Cindy 自带的 Pi 引擎，每轮都能看到费用。「压缩」改为点一下复制 /compact，压缩完成后面板会提示，不再需要「向任务投递消息」权限。新增像素风图标与鼠标互动动效，系统开启「减少动态效果」时自动关闭。",
+  "icon": "assets/icon.png",
+  "entry": "main.js",
+  "launch": "on-demand",
+  "panel": {
+    "title": "轨迹与余额",
+    "html": "panel/app.html",
+    "position": "right"
+  },
+  "taskView": {
+    "title": "轨迹与余额",
+    "html": "panel/app.html"
+  },
+  "settingsHtml": "settings.html",
+  "network": {
+    "connections": [
+      {
+        "key": "bearer",
+        "label": "供应商（Bearer 令牌）",
+        "hint": "填供应商的接口域名与 API Key 或访问令牌，脚本里 Authorization: Bearer 的那一个。",
+        "inject": { "header": "Authorization", "format": "Bearer {value}" }
+      },
+      {
+        "key": "apikey",
+        "label": "供应商（x-api-key）",
+        "hint": "填供应商的接口域名与 API Key，脚本里放在 x-api-key 请求头的那一个。",
+        "inject": { "header": "x-api-key", "format": "{value}" }
+      }
+    ]
+  },
+  "node": {
+    "entry": "node/worker.cjs",
+    "protocol": "json-rpc-stdio",
+    "lifecycle": "on-demand",
+    "idleTimeoutSeconds": 180
+  }
+}
