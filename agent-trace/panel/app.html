@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>轨迹与余额</title>
+<link rel="stylesheet" href="tokens.css" />
+<link rel="stylesheet" href="shell.css" />
+<link rel="stylesheet" href="traj.css" />
+<link rel="stylesheet" href="balance.css" />
+<link rel="stylesheet" href="fx.css" />
+</head>
+<body>
+<div class="shell">
+  <nav class="shell-tabs" role="tablist" aria-label="功能">
+    <button class="shell-tab" role="tab" data-tab="traj" aria-selected="true">轨迹</button>
+    <button class="shell-tab" role="tab" data-tab="balance" aria-selected="false">余额</button>
+  </nav>
+  <main class="shell-main">
+    <section id="view-traj" class="shell-view" role="tabpanel"></section>
+    <section id="view-balance" class="shell-view" role="tabpanel" hidden></section>
+  </main>
+</div>
+<div class="shell-toast" id="shellToast" role="status" aria-live="polite"></div>
+<!-- CSP 不放行内联脚本：脚本必须是外挂文件。加载顺序固定：bridge → icons（共用像素图标）→ 轨迹模块（util → traj）→ 余额模块 → shell → fx（像素动效，可有可无） -->
+<script src="bridge.js"></script>
+<script src="icons.js"></script>
+<script src="traj-util.js"></script>
+<script src="traj.js"></script>
+<script src="balance.js"></script>
+<script src="shell.js"></script>
+<script src="fx.js"></script>
+</body>
+</html>

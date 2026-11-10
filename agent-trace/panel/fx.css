@@ -1,0 +1,42 @@
+/* fx.css — 鼠标互动的像素动效（看板 M4），两个页签与外壳共用。规范见 tokens.css 的 --at-px / --at-fx-*。
+ * 原则：只有鼠标碰到的元素动；动画按 steps() 分帧跳变，像像素画一样一格一格地变；不浮起、不加阴影、不加颜色。
+ * 本文件最后加载，只叠加动效，不改布局。 */
+
+/* —— 按钮悬停：一层淡墨色底从左往右分 4 帧铺开 —— */
+.tj-btn, .bal-btn:not(.primary), .shell-tab { position: relative; isolation: isolate; }
+.tj-btn::after, .bal-btn:not(.primary)::after, .shell-tab::after {
+  content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none; border-radius: inherit;
+  background: var(--at-ink); opacity: .07;
+  clip-path: inset(0 100% 0 0);
+  transition: clip-path var(--at-fx-ms) steps(var(--at-fx-steps), end);
+}
+.tj-btn:hover:not(:disabled)::after, .bal-btn:not(.primary):hover:not(:disabled)::after, .shell-tab:hover::after { clip-path: inset(0 0 0 0); }
+.shell-tab[aria-selected="true"]::after { display: none; }
+
+/* —— 图标按钮悬停：图标向上跳 1 像素（一帧，不滑） —— */
+.tj-icon-btn svg, .bal-icon-btn svg, .bal-pin svg, .shell-chip-refresh svg { transition: translate var(--at-fx-ms) steps(1, end); }
+.tj-icon-btn:hover:not(:disabled) svg, .bal-icon-btn:hover:not(:disabled) svg, .bal-pin:hover svg, .shell-chip-refresh:hover:not(:disabled) svg { translate: 0 -1px; }
+
+/* —— 压缩提示展开 / 收拢：同样分 4 帧 —— */
+.tj-reveal { transition-timing-function: steps(var(--at-fx-steps), end); }
+
+/* —— 刷新中：转圈改成 8 步，像像素钟表一格一格走 —— */
+.tj-icon-btn.is-busy svg, .bal-refresh.spinning .bal-ico, .shell-chip-refresh.spinning svg { animation-timing-function: steps(8, end); }
+
+/* —— 账本行悬停：底部命中细线从左往右逐格重新点亮，并稍微变深 —— */
+.tj-row:hover .tj-bar-fill { animation: at-fill calc(var(--at-fx-ms) * 1.5) steps(8, end); opacity: .85; }
+@keyframes at-fill { from { transform: scaleX(0); } }
+
+/* —— 点击：从指针处迸出 4 个 2 像素小方块（fx.js 生成，用完即删） —— */
+.at-px {
+  position: fixed; width: var(--at-px); height: var(--at-px); margin: calc(var(--at-px) / -2) 0 0 calc(var(--at-px) / -2);
+  background: currentColor; pointer-events: none; z-index: 2147483000;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tj-btn::after, .bal-btn:not(.primary)::after, .shell-tab::after { transition: none; }
+  .tj-icon-btn svg, .bal-icon-btn svg, .bal-pin svg, .shell-chip-refresh svg { transition: none; }
+  .tj-icon-btn:hover:not(:disabled) svg, .bal-icon-btn:hover:not(:disabled) svg, .bal-pin:hover svg, .shell-chip-refresh:hover:not(:disabled) svg { translate: none; }
+  .tj-row:hover .tj-bar-fill { animation: none; }
+  .at-px { display: none; }
+}

@@ -1,0 +1,33 @@
+/* tokens.css — 轨迹与余额两个页签共用的设计变量。颜色一律取宿主主题变量并给回退值，不写死 color-scheme。
+ * 名称与取值是两个页签之间的约定，改动前先同步另一侧。accent 只用于「进行中」小圆点与焦点环，不做装饰。 */
+:root {
+  --at-ink: var(--text-primary, #1a1a1a);
+  --at-ink-2: var(--text-secondary, #666);
+  --at-line: var(--border-default, #e4e4e0);
+  --at-bg: var(--panel-bg, #f7f7f5);
+  --at-surface: var(--surface, #fff);
+  --at-accent: var(--accent, #d9531e);
+  --at-warn: var(--warning, #c98a1b);
+  --at-danger: var(--danger, #d23f3f);
+
+  --at-s1: 4px;
+  --at-s2: 8px;
+  --at-s3: 12px;
+  --at-s4: 16px;
+  --at-s5: 24px;
+  --at-s6: 32px;
+
+  --at-fs-xs: 11px;
+  --at-fs-sm: 12px;
+  --at-fs-md: 13px;
+  --at-fs-hero: 28px;
+
+  --at-radius: 6px;
+  --at-bar-h: 2px;
+
+  /* 像素动效（fx.css / fx.js）：一格 2px，动画一律用 steps() 分帧跳变而不是平滑过渡；单段动画 ≤ 160ms，
+   * 只动 transform / opacity / clip-path。系统开了「减少动态效果」时 fx.css 全部关闭。 */
+  --at-px: 2px;
+  --at-fx-ms: 160ms;
+  --at-fx-steps: 4;
+}
