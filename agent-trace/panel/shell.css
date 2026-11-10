@@ -1,0 +1,71 @@
+/* shell.css — 页签外壳。颜色取共享变量 --at-*（panel/tokens.css），每处带宿主主题变量与固定值两级回退；不要写死 color-scheme。 */
+html, body { margin: 0; height: 100%; }
+body {
+  background: var(--at-bg, var(--panel-bg, #f7f7f5));
+  color: var(--at-ink, var(--text-primary, #1a1a1a));
+  font: 13px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+.shell { display: flex; flex-direction: column; height: 100%; min-width: 0; }
+.shell-tabs { display: flex; gap: 2px; padding: 6px 8px 0; border-bottom: 1px solid var(--at-line, var(--border-default, #e4e4e0)); flex: none; }
+.shell-tab {
+  appearance: none; border: 0; background: transparent; color: var(--at-ink-2, var(--text-secondary, #666));
+  padding: 6px 12px; border-radius: 6px 6px 0 0; cursor: pointer; font: inherit;
+  border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; flex: none;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.shell-tab .at-ico { flex: none; }
+/* 窄面板把位置让给右侧的余额金额：页签只留文字 */
+@media (max-width: 419px) { .shell-tab .at-ico { display: none; } }
+.shell-tab:hover { color: var(--at-ink, var(--text-primary, #1a1a1a)); }
+.shell-tab[aria-selected="true"] { color: var(--at-ink, var(--text-primary, #1a1a1a)); font-weight: 600; border-bottom-color: var(--at-ink, var(--text-primary, #1a1a1a)); }
+.shell-tab:focus-visible { outline: 2px solid var(--at-accent, var(--accent, #d9531e)); outline-offset: -2px; }
+.shell-main { flex: 1; min-height: 0; position: relative; }
+.shell-view { position: absolute; inset: 0; overflow: auto; }
+.shell-view[hidden] { display: none; }
+.shell-toast {
+  position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%) translateY(20px); opacity: 0; pointer-events: none;
+  background: var(--at-ink, var(--text-primary, #1a1a1a)); color: var(--at-bg, var(--panel-bg, #f7f7f5)); font-size: var(--at-fs-sm, 12px);
+  border-radius: var(--at-radius, 6px); padding: 6px 12px; transition: opacity .18s, transform .18s; max-width: 90%;
+}
+.shell-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+@media (prefers-reduced-motion: reduce) { .shell-toast { transition: none; } }
+
+/* 页签栏右侧的余额芯片：没有描边胶囊，金额用墨色、名称用次要色；失败的变暗并带一个小感叹号。
+ * 颜色取共享变量 --at-*（带回退值）。窄面板（<420px）名称缩成省略号，<360px 只显示金额。 */
+.shell-chips {
+  --c-ink: var(--at-ink, var(--text-primary, #1a1a1a));
+  --c-ink-2: var(--at-ink-2, var(--text-secondary, #666));
+  --c-warn: var(--at-warn, var(--warning, #c98a1b));
+  --c-accent: var(--at-accent, var(--accent, #d9531e));
+  margin-left: auto; align-self: center; display: flex; align-items: center; gap: 2px; min-width: 0; padding-bottom: 5px; overflow: hidden;
+}
+.shell-chips[hidden] { display: none; }
+.shell-chips-list { display: flex; gap: 2px; min-width: 0; overflow: hidden; }
+.shell-chip {
+  appearance: none; border: 0; background: none; font: inherit; font-size: var(--at-fs-sm, 12px); line-height: 1.4; cursor: pointer; min-width: 0;
+  display: inline-flex; align-items: baseline; gap: 5px; padding: 2px 6px; border-radius: var(--at-radius, 6px); flex: 0 1 auto; overflow: hidden;
+  color: var(--c-ink);
+}
+.shell-chip:hover .shell-chip-name { color: var(--c-ink); }
+.shell-chip:focus-visible, .shell-chip-refresh:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 0; }
+.shell-chip-name { max-width: 7em; min-width: 1.5em; flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--c-ink-2); }
+.shell-chip-amount { flex: none; font-weight: 500; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.shell-chip-refresh, .shell-chip-more, .shell-chip-warn { flex: none; }
+.shell-chip.is-dim { opacity: .5; }
+.shell-chip.is-invalid .shell-chip-amount { color: var(--c-warn); }
+.shell-chip-warn { color: var(--c-warn); font-weight: 600; margin-left: -2px; }
+.shell-chip-more { color: var(--c-ink-2); }
+.shell-chip-more:hover { color: var(--c-ink); }
+.shell-chip-refresh {
+  appearance: none; border: 0; background: transparent; cursor: pointer; padding: 0;
+  width: 22px; height: 22px; border-radius: var(--at-radius, 6px); color: var(--c-ink-2);
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.shell-chip-refresh svg { width: 16px; height: 16px; display: block; }
+.shell-chip-refresh:hover:not(:disabled) { color: var(--c-ink); }
+.shell-chip-refresh:disabled { cursor: default; }
+.shell-chip-refresh.spinning svg { animation: shell-spin .9s linear infinite; }
+@keyframes shell-spin { to { transform: rotate(360deg); } }
+@media (max-width: 419px) { .shell-chip-name { max-width: 4.5em; } }
+@media (max-width: 359px) { .shell-chip-name { display: none; } .shell-tab { padding-left: 8px; padding-right: 8px; } }
+@media (prefers-reduced-motion: reduce) { .shell-chip-refresh.spinning svg { animation: none; opacity: .45; } }
