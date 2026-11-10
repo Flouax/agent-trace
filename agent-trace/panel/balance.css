@@ -1,0 +1,168 @@
+/* balance.css — 余额界面（余额页签与设置页共用）。
+ * 与轨迹页签同一套安静的排版：不用卡片和边框盒子，用留白分组；颜色只取共享变量 --at-*（panel/tokens.css），
+ * 每个都带回退值：设置页不加载 tokens.css，tokens.css 不在时也照常显示。accent 只给焦点环。 */
+.bal-root {
+  --b-ink: var(--at-ink, var(--text-primary, #1a1a1a));
+  --b-ink-2: var(--at-ink-2, var(--text-secondary, #666));
+  --b-line: var(--at-line, var(--border-default, #e4e4e0));
+  --b-bg: var(--at-bg, var(--panel-bg, #f7f7f5));
+  --b-surface: var(--at-surface, var(--surface, #fff));
+  --b-accent: var(--at-accent, var(--accent, #d9531e));
+  --b-warn: var(--at-warn, var(--warning, #c98a1b));
+  --b-danger: var(--at-danger, var(--danger, #d23f3f));
+  --b-s1: var(--at-s1, 4px); --b-s2: var(--at-s2, 8px); --b-s3: var(--at-s3, 12px);
+  --b-s4: var(--at-s4, 16px); --b-s5: var(--at-s5, 24px); --b-s6: var(--at-s6, 32px);
+  --b-fs-xs: var(--at-fs-xs, 11px); --b-fs-sm: var(--at-fs-sm, 12px); --b-fs-md: var(--at-fs-md, 13px);
+  --b-radius: var(--at-radius, 6px); --b-bar-h: var(--at-bar-h, 2px);
+  --b-pin-w: 20px;
+
+  padding: var(--b-s4) var(--b-s4) var(--b-s6); min-width: 0; box-sizing: border-box;
+  color: var(--b-ink); font-size: var(--b-fs-md); line-height: 1.5;
+}
+.bal-root *, .bal-root *::before, .bal-root *::after { box-sizing: border-box; }
+.bal-root [hidden] { display: none !important; }
+.bal-root button { font: inherit; color: inherit; }
+.bal-root :focus-visible { outline: 2px solid var(--b-accent); outline-offset: 2px; border-radius: 4px; }
+
+/* 标题行 */
+.bal-toolbar { display: flex; align-items: center; justify-content: space-between; gap: var(--b-s2); margin-bottom: var(--b-s5); }
+.bal-title { margin: 0; font-size: var(--b-fs-sm); font-weight: 400; color: var(--b-ink-2); min-width: 0; }
+.bal-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.bal-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bal-toolbar-actions { display: flex; flex: none; gap: 0; margin-right: calc(-1 * var(--b-s2)); }
+.bal-toolbar-actions .bal-btn { white-space: nowrap; }
+
+/* 按钮：平时是安静的文字；主操作用墨色实底 */
+.bal-btn {
+  appearance: none; border: 0; background: none; cursor: pointer; padding: var(--b-s1) var(--b-s2); border-radius: var(--b-radius);
+  font-size: var(--b-fs-sm); line-height: 1.4; color: var(--b-ink-2);
+  display: inline-flex; align-items: center; gap: 4px;
+}
+.bal-btn:hover:not(:disabled) { color: var(--b-ink); }
+.bal-btn:disabled { opacity: .45; cursor: default; }
+.bal-btn.strong { color: var(--b-ink); font-weight: 500; }
+.bal-btn.primary { background: var(--b-ink); color: var(--b-bg); padding: 5px var(--b-s3); font-weight: 500; }
+.bal-btn.primary:hover:not(:disabled) { color: var(--b-bg); }
+.bal-btn.danger, .bal-btn.danger:hover:not(:disabled) { color: var(--b-danger); font-weight: 500; }
+
+.bal-notice { font-size: var(--b-fs-sm); color: var(--b-ink-2); margin: calc(-1 * var(--b-s3)) 0 var(--b-s5); }
+
+/* 供应商行：左 名称与说明，右 余额与近期消耗；行与行之间只有留白 */
+.bal-list { display: flex; flex-direction: column; gap: var(--b-s5); }
+.bal-row {
+  display: grid; column-gap: var(--b-s2); align-items: start; min-width: 0;
+  grid-template-columns: var(--b-pin-w) minmax(0, 1fr) auto 22px;
+  grid-template-areas: "pin name amount acts" ". meta spend acts" ". detail detail .";
+}
+.bal-pin { grid-area: pin; }
+.bal-name { grid-area: name; min-width: 0; font-size: var(--b-fs-md); font-weight: 500; line-height: 22px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bal-meta { grid-area: meta; display: flex; align-items: center; gap: var(--b-s2); min-width: 0; font-size: var(--b-fs-xs); color: var(--b-ink-2); height: 22px; }
+.bal-host { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bal-time { flex: none; white-space: nowrap; }
+.bal-amount-value, .bal-amount-none { grid-area: amount; text-align: right; font-size: 16px; line-height: 22px; white-space: nowrap; }
+.bal-amount-value { font-weight: 500; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.bal-amount-none { color: var(--b-ink-2); }
+.bal-spend { grid-area: spend; text-align: right; font-size: var(--b-fs-xs); line-height: 22px; color: var(--b-ink-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.bal-row[data-state="invalid"] .bal-amount-value { color: var(--b-warn); }
+.bal-acts { grid-area: acts; display: flex; flex-direction: column; margin-right: -4px; }
+.bal-detail { grid-area: detail; min-width: 0; display: flex; flex-direction: column; gap: var(--b-s1); margin-top: var(--b-s1); font-size: var(--b-fs-sm); }
+/* 窄面板：近期消耗另起一行，给域名和更新时间让出位置 */
+@media (max-width: 400px) {
+  .bal-row { grid-template-areas: "pin name amount acts" ". meta meta acts" ". spend spend ." ". detail detail ."; }
+  .bal-spend { text-align: left; line-height: 18px; }
+}
+.dim { opacity: .5; }
+
+/* 图标：共用的像素图标（icons.js），只在 16px 下清晰，不要缩放；点按区 22–24px（触屏也够点） */
+.bal-ico { width: 16px; height: 16px; display: block; flex: none; }
+.bal-pin, .bal-icon-btn {
+  appearance: none; border: 0; background: none; padding: 0; cursor: pointer; border-radius: var(--b-radius);
+  display: inline-flex; align-items: center; justify-content: center; flex: none; color: var(--b-ink-2);
+}
+.bal-icon-btn { width: 22px; height: 22px; }
+.bal-icon-btn:hover:not(:disabled), .bal-pin:hover { color: var(--b-ink); }
+.bal-icon-btn:disabled { cursor: default; }
+.bal-refresh:disabled:not(.spinning) { opacity: .45; }
+.bal-more[aria-expanded="true"] { color: var(--b-ink); }
+.bal-pin { width: var(--b-pin-w); height: 22px; opacity: .4; margin-left: -3px; }
+.bal-pin[aria-pressed="true"] { color: var(--b-ink); opacity: 1; }
+.bal-refresh.spinning .bal-ico { animation: bal-spin 0.9s linear infinite; }
+@keyframes bal-spin { to { transform: rotate(360deg); } }
+
+/* 细线进度：已用 / 总额，填充是中性墨色 */
+.bal-bar { height: var(--b-bar-h); background: var(--b-line); overflow: hidden; margin-top: var(--b-s1); }
+.bal-bar-fill { height: 100%; background: var(--b-ink); opacity: .7; }
+.bal-bar-text, .bal-plan, .bal-extra, .bal-note { font-size: var(--b-fs-xs); color: var(--b-ink-2); font-variant-numeric: tabular-nums; word-break: break-word; }
+.bal-invalid, .bal-warn { font-size: var(--b-fs-sm); color: var(--b-warn); word-break: break-word; }
+.bal-error { font-size: var(--b-fs-sm); color: var(--b-danger); line-height: 1.5; word-break: break-word; }
+
+/* 多套餐：一行文字开关，展开后每个套餐一行 */
+.bal-plans-toggle {
+  appearance: none; border: 0; background: none; padding: 0; cursor: pointer; align-self: flex-start;
+  display: inline-flex; align-items: center; gap: 2px; font-size: var(--b-fs-sm); color: var(--b-ink-2); margin-left: -3px;
+}
+.bal-plans-toggle:hover { color: var(--b-ink); }
+.bal-plans-toggle .bal-ico { transition: transform .16s steps(2, end); }
+.bal-plans-toggle[aria-expanded="true"] .bal-ico { transform: rotate(90deg); }
+.bal-plans { display: flex; flex-direction: column; gap: var(--b-s3); padding: var(--b-s2) 0 var(--b-s1) var(--b-s3); }
+.bal-plans.entering { animation: bal-open .18s ease-out; }
+@keyframes bal-open { from { opacity: 0; transform: translateY(-3px); } }
+.bal-plan-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--b-s2); }
+.bal-plan-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bal-plan-amount { font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* 「更多」展开后的编辑 / 删除 */
+.bal-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 0 var(--b-s1); margin-left: calc(-1 * var(--b-s2)); }
+.bal-tools-key, .bal-tools-ask { font-size: var(--b-fs-xs); color: var(--b-ink-2); padding: 0 var(--b-s2); }
+.bal-tools-ask { color: var(--b-ink); font-size: var(--b-fs-sm); }
+
+.bal-empty { padding: var(--b-s5) 0; }
+.bal-empty-title { font-weight: 500; margin-bottom: var(--b-s1); }
+.bal-empty-body { font-size: var(--b-fs-sm); color: var(--b-ink-2); max-width: 32em; }
+
+/* 添加 / 编辑：分段间距代替边框 */
+.bal-form-host:not(:empty) { margin-bottom: var(--b-s6); }
+.bal-form { display: flex; flex-direction: column; gap: var(--b-s4); }
+.bal-form-title { margin: 0; font-size: var(--b-fs-md); font-weight: 600; }
+.bal-presets { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0 var(--b-s1); margin-left: calc(-1 * var(--b-s2)); }
+.bal-presets-label { flex: 0 0 100%; font-size: var(--b-fs-sm); color: var(--b-ink-2); padding: 0 var(--b-s2); margin-bottom: 2px; }
+.bal-preset {
+  appearance: none; border: 0; background: none; cursor: pointer; padding: var(--b-s1) var(--b-s2); border-radius: var(--b-radius);
+  font-size: var(--b-fs-sm); color: var(--b-ink);
+}
+.bal-preset-path { color: var(--b-ink-2); font-size: var(--b-fs-xs); }
+.bal-preset:hover .bal-preset-name { text-decoration: underline; text-underline-offset: 3px; }
+.bal-preset-help { margin-top: calc(-1 * var(--b-s3)); }
+.bal-field { display: block; }
+.bal-label { display: block; font-size: var(--b-fs-sm); color: var(--b-ink-2); margin-bottom: var(--b-s1); }
+.bal-input {
+  display: block; width: 100%; font: inherit; font-size: var(--b-fs-sm); padding: 6px var(--b-s2); border-radius: var(--b-radius);
+  color: var(--b-ink); background: var(--b-surface); border: 1px solid var(--b-line);
+}
+.bal-input::placeholder { color: var(--b-ink-2); opacity: .7; }
+.bal-input:focus { outline: 2px solid var(--b-accent); outline-offset: -1px; border-color: transparent; }
+.bal-input.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: var(--b-fs-xs); line-height: 1.55; resize: vertical; min-height: 120px; }
+.bal-counter { font-size: var(--b-fs-xs); color: var(--b-ink-2); text-align: right; margin-top: var(--b-s1); font-variant-numeric: tabular-nums; }
+.bal-counter.over { color: var(--b-danger); }
+.bal-help { font-size: var(--b-fs-xs); color: var(--b-ink-2); margin-top: var(--b-s1); line-height: 1.5; }
+.bal-form > .bal-help { margin-top: calc(-1 * var(--b-s2)); }
+.bal-risk { font-size: var(--b-fs-xs); color: var(--b-ink-2); margin-top: calc(-1 * var(--b-s2)); }
+.bal-form > .bal-error { margin-top: calc(-1 * var(--b-s2)); }
+.bal-preview { display: flex; flex-direction: column; gap: var(--b-s1); font-size: var(--b-fs-sm); }
+.bal-pv-row { display: grid; grid-template-columns: 5.5em minmax(0, 1fr); gap: var(--b-s2); min-width: 0; }
+.bal-pv-k { color: var(--b-ink-2); font-size: var(--b-fs-xs); line-height: 1.7; }
+.bal-pv-v { min-width: 0; word-break: break-all; white-space: pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: var(--b-fs-xs); line-height: 1.7; }
+.bal-pv-note { font-size: var(--b-fs-xs); color: var(--b-ink-2); }
+.bal-pv-warn { font-size: var(--b-fs-xs); color: var(--b-warn); }
+.bal-form-actions { display: flex; align-items: center; gap: var(--b-s2); flex-wrap: wrap; }
+.bal-form-actions .bal-btn:not(.primary) { padding-left: var(--b-s2); padding-right: var(--b-s2); }
+
+@media (max-width: 360px) {
+  .bal-root { padding: var(--b-s3) var(--b-s3) var(--b-s5); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bal-refresh.spinning .bal-ico { animation: none; opacity: .45; }
+  .bal-plans.entering { animation: none; }
+  .bal-plans-toggle .bal-ico { transition: none; }
+}
