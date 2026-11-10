@@ -1187,7 +1187,7 @@
     const editing = f.provider;
     const old = editing ? { slot: editing.slot, host: editing.host, connectionId: editing.connectionId } : null;
 
-    // 密钥：点击的同一刻就取走并清空输入框；它只存在这个函数的局部变量里，只经 POST 交给宿主保险库
+    // 密钥：点击的同一刻就取走并清空输入框；它只存在于这个函数的局部变量里，只经 POST 交给宿主保险库
     let token = ui.key.value;
     ui.key.value = '';
     f.busy = 'save';
