@@ -1,2 +1,33 @@
-# agent-trace
-Cindy 右侧栏插件「轨迹与余额」：按轮查看对话的缓存命中、token 与费用账本，并用脚本查询各供应商余额。
+# 轨迹与余额（agent-trace）
+
+一个 Cindy 插件，在任务侧边栏里放两个页签：
+
+- **轨迹**：读取当前任务（Claude Code / Pi 引擎）的会话记录，按轮展示输入、输出、缓存命中率、生成速率和上下文占用；可一键复制 `/compact` 压缩上下文。
+- **余额**：粘贴 CC Switch 的用量查询脚本（或选内置预设：通用 / New API / Sub2API），一键查询各供应商余额；支持页签栏芯片、近期消耗、30 分钟自动刷新。密钥只存入 Cindy 系统保险库，界面和插件都读不回。
+
+当前版本 **0.2.0**，需要 Cindy ≥ 0.1.129。
+
+## 安装
+
+```bash
+git clone https://github.com/Flouax/agent-trace.git
+```
+
+然后在 Cindy 里让伙伴调用 `ghost_forge_install`，`dir` 指向克隆下来的 `agent-trace/agent-trace` 目录（含 `ghost.json` 的那一层），按弹出的权限卡确认即可。
+
+## 目录
+
+```
+agent-trace/
+  ghost.json         插件清单
+  main.js            主脑（工具与面板入口）
+  settings.html/js   设置页
+  panel/             面板：轨迹、余额、外壳、图标、样式
+  node/              随包 Node 服务：引擎适配（cc / pi）、余额抓取、脚本沙箱
+  assets/icon.png    图标
+```
+
+## 说明
+
+- 余额查询脚本在沙箱里执行，请只粘贴来源可信的脚本。
+- 本仓库只含插件源码；测试、夹具、设计稿和打包产物留在作者本地。
