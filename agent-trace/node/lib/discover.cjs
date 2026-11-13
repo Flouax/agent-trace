@@ -24,6 +24,8 @@ const FIRSTMSG_BYTES = 64 * 1024;
 const FIRSTMSG_SCAN = 300; // 逐个读头部，只看最新的这些
 const PATH_SCAN = 5000;
 const DB_COLUMNS_SQL = 'SELECT id, agent_kind, sdk_session_id, working_dir, title, updated_at FROM sessions WHERE id = ?';
+// 状态栏上下文只在伙伴聊天显示：宿主用 sessions.source = 'bot' 判断伙伴会话（SPEC 附录 G）。单独一条，只读这一列
+const DB_SOURCE_SQL = 'SELECT source FROM sessions WHERE id = ?';
 
 // ---------- Cindy 数据库 ----------
 
@@ -59,12 +61,12 @@ function loadSqlite() {
   return sqlite;
 }
 
-function selectRow(dbPath, id) {
+function selectRow(dbPath, id, sql) {
   const sq = loadSqlite();
   if (!sq) throw new Error('node:sqlite 不可用');
   const db = new sq.DatabaseSync(dbPath, { readOnly: true });
   try {
-    return db.prepare(DB_COLUMNS_SQL).get(id) || null;
+    return db.prepare(sql || DB_COLUMNS_SQL).get(id) || null;
   } finally {
     try { db.close(); } catch { /* 忽略 */ }
   }
@@ -125,22 +127,31 @@ function cleanupCopies() {
 process.on('exit', cleanupCopies);
 
 /** 返回 sessions 行或 null；任何失败都返回 null。 */
-function lookupRow(sessionId) {
+function lookupRow(sessionId, sql) {
   try {
     const dbPath = findDbFile(cindyDataDir());
     if (!dbPath) return null;
     try {
-      const r = selectRow(dbPath, sessionId);
+      const r = selectRow(dbPath, sessionId, sql);
       stats.directReads += 1;
       return r;
-    } catch {
-      const r = selectRow(ensureCopy(dbPath), sessionId);
+    } catch (err) {
+      if (/no such column/i.test(String(err && err.message))) return null; // 旧库没有这一列
+      const r = selectRow(ensureCopy(dbPath), sessionId, sql);
       stats.copyReads += 1;
       return r;
     }
   } catch {
     return null;
   }
+}
+
+/** 任务来源（'bot' = 伙伴聊天、'desktop'、'scheduler'…）；查不到或旧库没有这一列返回 null。 */
+function sessionSource(sessionId) {
+  const id = String(sessionId || '');
+  if (id.length < MIN_ID_LEN) return null;
+  const r = lookupRow(id, DB_SOURCE_SQL);
+  return r && typeof r.source === 'string' ? r.source : null;
 }
 
 // ---------- 候选文件 ----------
@@ -239,4 +250,4 @@ function listAllSessions({ limit, query } = {}) {
   return { sessions: rows.slice(0, lim), total: rows.length };
 }
 
-module.exports = { resolveSession, listAllSessions, cindyDataDir, findDbFile, cleanupCopies, _test: { ensureCopy, selectRow, stats, copyDir: () => (copyCache ? copyCache.dir : null) } };
+module.exports = { resolveSession, sessionSource, listAllSessions, cindyDataDir, findDbFile, cleanupCopies, _test: { ensureCopy, selectRow, stats, copyDir: () => (copyCache ? copyCache.dir : null) } };

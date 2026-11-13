@@ -30,18 +30,20 @@
   /**
    * 调用 main.js 的一个操作。电子脑按需拉起，所以先唤醒，再按 reqId 每 450ms 重发直到收到回执
    * （main.js 按 reqId 去重）。开发时可设置 window.__AGENT_TRACE_MOCK__ = (op, payload) => data 绕过真实通道。
+   * opts.timeoutMs 放宽等待上限（如刷新全部余额最多 120 秒），缺省约 45 秒。
    */
-  function call(op, payload) {
+  function call(op, payload, opts) {
     const mock = window.__AGENT_TRACE_MOCK__;
     if (typeof mock === 'function') return Promise.resolve().then(() => mock(op, payload || {}));
     if (!bus) return Promise.reject(Object.assign(new Error('当前环境不支持 BroadcastChannel'), { code: 'NO_BUS' }));
     const reqId = `${Date.now().toString(36)}-${(seq++).toString(36)}`;
+    const maxTries = opts && Number(opts.timeoutMs) > 0 ? Math.ceil(Number(opts.timeoutMs) / RETRY_MS) : MAX_TRIES;
     return new Promise((resolve, reject) => {
       let tries = 0;
       const timer = setInterval(() => {
         if (!waiting.has(reqId)) return;
         tries += 1;
-        if (tries > MAX_TRIES) {
+        if (tries > maxTries) {
           clearInterval(timer);
           waiting.delete(reqId);
           reject(Object.assign(new Error('电子脑没有响应，请重试'), { code: 'TIMEOUT' }));

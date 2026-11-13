@@ -2,18 +2,13 @@
  * balance.js — 余额页签：粘贴 CC Switch 用量查询脚本，点刷新查各供应商余额（契约见 SPEC.md 第 8 节）。
  *
  * 数据流：条目存 /kv（只存脚本与结果，不含密钥）；密钥一次性 POST 给宿主保险库（/connections），读不回；
- * 查询 = bridge 的 balance/analyze → balance/fetch（宿主代发并注入密钥）→ balance/extract。
- * 查询：点击刷新，或主面板页的 30 分钟自动刷新（createAutoRefresh）。页面里没有任何地方保存密钥：输入框一取值就清空。
+ * 查询 = 管子操作 balance/refresh，由 main.js 的 refreshBalances 执行 analyze → fetch（宿主代发并注入密钥）→ extract → 写 /kv（SPEC 附录 F）。
+ * 触发：点击刷新、状态栏的余额按钮（不经过页面），或电子脑的 10 分钟自动刷新（SPEC 附录 H；页面只报告「我可见」）。页面里没有任何地方保存密钥：输入框一取值就清空。
  * 每家另存两个可选字段：pinned（是否显示在页签栏）与 history（近期消耗用的余额点），口径见 SPEC 附录 D。
  */
 (function () {
   'use strict';
 
-  /**
-   * 自动刷新周期（分钟），0 表示关闭。只有主面板页的 shell 会启动定时器（startAutoRefresh），
-   * 设置页里挂的同一个模块不启动，避免两处各刷各的。规则见 createAutoRefresh。
-   */
-  const AUTO_REFRESH_MINUTES = 30;
   const CHIP_STALE_MS = 60 * 60 * 1000; // 页签栏芯片：错过两个周期仍没更新才变暗
   const SYNC_CHANNEL = 'agent-trace-balance-v1';
   const EVENT_UPDATED = 'agent-trace:balance-updated';
@@ -312,23 +307,9 @@
 
   /* ---------- 近期消耗（history） ----------
    * 每家只记第一项的剩余额度与时间。「现在」取最近一次成功查询的时间（金额就是那一刻的），
-   * 基准点取比它早至少 15 分钟、且不早于 6 小时的最新一点。单位变了就清空历史，所以历史里的点与当前单位一致。 */
+   * 基准点取比它早至少 15 分钟、且不早于 6 小时的最新一点。历史点由电子脑在每次成功查询后追加（main.js 的 recordPoint，单位变了清空）。 */
   const SPEND = { minGapMs: 5 * 60000, minAgeMs: 15 * 60000, maxAgeMs: 6 * 3600000, maxPoints: 24 };
   const validPoint = (x) => x && Number.isFinite(x.at) && typeof x.remaining === 'number' && Number.isFinite(x.remaining);
-
-  /** 一次成功查询之后更新 entry.history（entry.last 此时仍是上一次的结果，用来判断单位有没有变）。 */
-  function recordPoint(entry, next) {
-    const it = firstItem(next);
-    const value = amountOf(it);
-    if (!next || !next.ok || !Number.isFinite(next.at) || typeof value !== 'number' || !Number.isFinite(value)) return;
-    const prev = firstItem(entry.last);
-    let hist = Array.isArray(entry.history) ? entry.history.filter(validPoint) : [];
-    if (prev && unitOf(prev) !== unitOf(it)) hist = [];
-    const tail = hist[hist.length - 1];
-    // 间隔不足 5 分钟（手动连点）不追加；时间倒退（时钟或重复写回）也不追加
-    if (!tail || next.at - tail.at >= SPEND.minGapMs) hist.push({ at: next.at, remaining: value });
-    entry.history = hist.filter((x) => next.at - x.at <= SPEND.maxAgeMs).slice(-SPEND.maxPoints);
-  }
 
   /** 近期消耗；不该显示时返回 null（没有基准点、上次失败、充值导致余额增加、没有数值）。 */
   function recentSpend(p) {
@@ -452,17 +433,6 @@
     return run;
   }
 
-  /** 只把这几条的查询结果写回（别的字段以 /kv 里最新的为准）；历史点在 /kv 里最新的那份历史上追加。 */
-  const touchLast = (touched) => (list) => {
-    for (const p of touched) {
-      const target = list.find((x) => x.id === p.id);
-      if (!target || !p.last) continue;
-      if (p.last.ok && !(target.last && target.last.at >= p.last.at)) recordPoint(target, p.last);
-      target.last = p.last;
-    }
-    return list;
-  };
-
   function stripProvider(p) {
     const out = { id: p.id, name: p.name, baseUrl: p.baseUrl, script: p.script, slot: p.slot, host: p.host, connectionId: p.connectionId, createdAt: p.createdAt };
     if (p.userId) out.userId = p.userId;
@@ -517,96 +487,40 @@
     return msg || T.unknown;
   }
 
-  /** 只用于错误显示：去标签、折叠空白、截断。不写入 /kv 以外的任何地方。 */
-  function summarize(text, max) {
-    const flat = String(text || '').replace(/<(script|style)[\s\S]*?<\/\1>/gi, ' ').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
-    return flat.length > max ? `${flat.slice(0, max)}…` : flat;
-  }
-
-  function pathOf(url) {
-    try {
-      const u = new URL(url);
-      const path = u.pathname + u.search;
-      return path.length > 80 ? `${path.slice(0, 80)}…` : path;
-    } catch (err) {
-      return '';
-    }
-  }
-
-  function isJson(text) {
-    try { JSON.parse(text); return true; } catch (err) { return false; }
-  }
-
-  /** JSON 响应里的 message / error 字段（对方自己的说明）。 */
-  function peekMessage(text) {
-    try {
-      const obj = JSON.parse(text);
-      const m = obj && (obj.message || (obj.error && (obj.error.message || obj.error)) || obj.msg);
-      return typeof m === 'string' ? summarize(m, 120) : '';
-    } catch (err) {
-      return '';
-    }
-  }
-
-  const looksHtml = (res) => /html/i.test(res.contentType || '') || /^\s*(<!doctype|<html|<head|<body)/i.test(res.text || '');
-
-  /** 把代发结果翻译成人话；一切正常（2xx 且是 JSON）返回 null。 */
-  function responseProblem(res, request) {
-    const s = res.status;
-    const path = pathOf(request.url);
-    const said = peekMessage(res.text || '');
-    if (res.ok) {
-      if (res.truncated) return coded(T.truncated, 'TRUNCATED');
-      if (isJson(res.text || '')) return null;
-      if (looksHtml(res)) return coded(T.notJsonHtml(s, path), 'NOT_JSON');
-      return coded(T.notJson(s, summarize(res.text, 80)), 'NOT_JSON');
-    }
-    let text;
-    if (s === 401 || s === 403) text = T.httpAuth(s) + (said ? ` ${T.providerSaid(said)}` : '');
-    else if (s === 404) text = T.httpNotFound(path);
-    else if (s === 429) text = T.httpRate;
-    else if (s >= 500) text = T.httpServer(s);
-    else text = T.httpOther(s, said || summarize(res.text, 120));
-    return coded(text, 'HTTP');
-  }
-
   function analysisError(a) {
     return coded(a.message || T.unknown, a.code || 'ANALYZE');
   }
 
-  async function queryProvider(p) {
-    const base = { script: p.script, baseUrl: p.baseUrl || '', userId: p.userId || '' };
-    const a = await bridge().call('balance/analyze', base);
-    if (!a || !a.ok) throw analysisError(a || {});
-    if (a.host !== p.host || a.slot !== p.slot) throw coded(T.errTargetChanged, 'TARGET_CHANGED');
-    const f = await bridge().call('balance/fetch', { request: a.request });
-    const problem = responseProblem(f, a.request);
-    if (problem) throw problem;
-    const x = await bridge().call('balance/extract', { ...base, responseText: f.text });
-    if (!x || !x.ok) throw analysisError(x || {});
-    return x.items;
+  /* ---------- 查询：全部交给电子脑的 refreshBalances（SPEC 附录 F）----------
+   * 页面不再自己 analyze/fetch/extract：只发 balance/refresh，等回执期间把这几家标成「查询中」，回执后重读 /kv。
+   * 状态栏点击或别的页面发起的刷新，由电子脑在同步通道上广播 balance-refreshing，这里同样显示转圈。 */
+  const REFRESH_TIMEOUT_MS = 120000;
+  const remote = new Set();
+
+  async function requestRefresh(ids) {
+    try {
+      const r = await bridge().call('balance/refresh', ids ? { ids } : {}, { timeoutMs: REFRESH_TIMEOUT_MS });
+      if (r && r.ok === false && r.error) toast(T.errKvWrite + (r.error.message || ''));
+      return r;
+    } catch (err) {
+      toast(explain(err));
+      return null;
+    }
   }
 
-  async function refreshOne(p, opts) {
-    // 同一时刻只允许一批刷新：整批进行中时，界面上的单卡刷新不另起请求（整批自己调用时带 persist:false）
-    if (state.busy.has(p.id) || (batchPromise && !(opts && opts.persist === false))) return;
+  async function refreshOne(p) {
+    // 同一时刻只允许一批刷新：整批进行中时，单卡刷新不另起请求（电子脑那边也会合并）
+    if (state.busy.has(p.id) || batchPromise) return;
     state.busy.add(p.id);
     renderList();
     try {
-      const items = await queryProvider(p);
-      const next = { at: Date.now(), ok: true, items };
-      recordPoint(p, next); // 失败的那次不写历史点
-      p.last = next;
-    } catch (err) {
-      p.last = { at: Date.now(), ok: false, error: explain(err), ...(p.last && p.last.items ? { items: p.last.items } : {}) };
+      await requestRefresh([p.id]);
     } finally {
       state.busy.delete(p.id);
     }
+    await loadProviders().catch(() => {});
     renderList();
-    if (!opts || opts.persist !== false) {
-      await persist(touchLast([p])).catch((err) => toast(T.errKvWrite + ((err && err.message) || '')));
-      notifyUpdated();
-    }
+    notifyUpdated();
   }
 
   /* ---------- 通知：同页用 window 事件，别的页面（设置页等）用 BroadcastChannel ---------- */
@@ -626,13 +540,22 @@
     syncChannel = new BroadcastChannel(SYNC_CHANNEL);
     syncChannel.onmessage = (event) => {
       const m = event && event.data;
-      if (!m || m.type !== 'balance-updated' || m.source === PAGE_ID) return;
+      if (!m || m.source === PAGE_ID) return;
+      if (m.type === 'balance-refreshing' && m.source === 'brain') {
+        // 别处发起的刷新（状态栏点击、别的页面）：本页自己已标为查询中的不重复记
+        if (m.on) for (const id of Array.isArray(m.ids) ? m.ids : []) { if (!state.busy.has(id)) { state.busy.add(id); remote.add(id); } }
+        else { for (const id of remote) state.busy.delete(id); remote.clear(); }
+        emitRefreshing(Boolean(batchPromise) || remote.size > 0);
+        if (ctx) { renderHeader(); renderList(); }
+        return;
+      }
+      if (m.type !== 'balance-updated') return;
       // 别的页面改了数据：没有在途操作时重读；有的话等下一次显示时再读
       if (state.loaded && !state.batch && !state.busy.size && !state.form) loadAll();
     };
   }
 
-  /* ---------- 刷新全部（不依赖界面；同一时刻只跑一批，并发上限 3） ---------- */
+  /* ---------- 刷新全部（不依赖界面；同一时刻只跑一批，由电子脑执行，并发上限 3） ---------- */
   let batchPromise = null;
 
   function refreshAll() {
@@ -642,19 +565,16 @@
       emitRefreshing(true);
       renderHeader();
       renderList();
+      const mine = [];
       try {
         await loadProviders().catch(() => {});
-        const targets = state.providers.filter((p) => !state.busy.has(p.id));
-        let next = 0;
-        const runner = async () => {
-          while (next < targets.length) {
-            const p = targets[next]; next += 1;
-            await refreshOne(p, { persist: false });
-          }
-        };
-        await Promise.all(Array.from({ length: Math.min(LIMITS.concurrency, targets.length) }, runner));
-        if (targets.length) await persist(touchLast(targets)).catch((err) => toast(T.errKvWrite + ((err && err.message) || '')));
+        for (const p of state.providers) if (!state.busy.has(p.id)) { state.busy.add(p.id); mine.push(p.id); }
+        renderHeader();
+        renderList();
+        await requestRefresh(null);
       } finally {
+        for (const id of mine) state.busy.delete(id);
+        await loadProviders().catch(() => {});
         state.batch = false;
         batchPromise = null;
         renderHeader();
@@ -708,98 +628,29 @@
       const list = readProviders(await kvRead());
       const now = Date.now();
       const on = pinnedIds(list);
-      return { total: list.length, refreshing: state.batch, chips: list.filter((p) => on.has(p.id)).map((p) => chipFor(p, now)) };
+      return { total: list.length, refreshing: state.batch || remote.size > 0, chips: list.filter((p) => on.has(p.id)).map((p) => chipFor(p, now)) };
     } catch (err) {
       return { total: 0, refreshing: state.batch, chips: [], error: (err && err.message) || '' };
     }
   }
 
   /**
-   * 定时自动刷新（与手动刷新共用 refreshAll，同一时刻只有一批在跑）。依赖全部注入，便于用假时钟测试：
-   * - 启动时：有从未查询过的供应商，或最早的一次尝试（成功失败都算）距今 ≥ 周期，就立刻刷新；
-   * - 之后按「最早一次尝试 + 周期」排下一次；每次触发前先重读 /kv，别的页面刚刷过就顺延，不重复请求；
-   * - 刷新完固定等一个周期（失败也不加快重试）；有刷新在进行（手动或单卡）就跳过本次；
-   * - 页面不可见时清掉定时器、不发请求；重新可见时按同样规则判断要不要补刷。
+   * 自动刷新不在页面里（0.3.1 起）：电子脑里只有一个定时器，每 10 分钟、有人在看时刷新（SPEC 附录 H）。
+   * 页面只在自己变得可见时报告一声，电子脑据此判断要不要补刷（满 10 分钟才刷，不会因为切页签多查）。
    */
-  function createAutoRefresh(deps) {
-    const periodMs = Math.max(0, Number(deps.minutes) || 0) * 60000;
-    const info = { running: periodMs > 0, minutes: Number(deps.minutes) || 0, nextAt: null, lastAction: null, refreshes: 0 };
-    let timer = null;
-    let checking = false;
-
-    function clear() {
-      if (timer !== null) deps.clearTimer(timer);
-      timer = null;
-      info.nextAt = null;
-    }
-    function schedule(delay) {
-      clear();
-      if (!info.running || !deps.isVisible()) return;
-      const ms = Math.min(Math.max(delay, 1000), periodMs);
-      info.nextAt = deps.now() + ms;
-      timer = deps.setTimer(() => { timer = null; check(); }, ms);
-    }
-    /** 距下一次该刷新还有多久；0 = 现在就该刷；null = 没有供应商。 */
-    function waitFor(list, now) {
-      if (!list.length) return null;
-      let oldest = Infinity;
-      for (const p of list) {
-        if (!p.last || !Number.isFinite(p.last.at)) return 0;
-        oldest = Math.min(oldest, p.last.at);
+  async function seen() {
+    try {
+      const r = await bridge().call('balance/seen', {}, { timeoutMs: REFRESH_TIMEOUT_MS });
+      if (r && r.verdict === 'refresh') {
+        await loadProviders().catch(() => {});
+        if (ctx) renderAll();
+        notifyUpdated();
       }
-      return Math.max(0, oldest + periodMs - now);
+      return r;
+    } catch (err) {
+      return null; // 只是一次提醒，失败了等下一次可见或电子脑自己的定时
     }
-
-    async function check() {
-      if (!info.running || checking) return;
-      if (!deps.isVisible()) { clear(); info.lastAction = 'hidden'; return; }
-      checking = true;
-      try {
-        let list = null;
-        try { list = await deps.readList(); } catch (err) { /* 读不到就等下一个周期 */ }
-        if (!deps.isVisible()) { clear(); info.lastAction = 'hidden'; return; }
-        const wait = list ? waitFor(list, deps.now()) : periodMs;
-        if (wait === null) { info.lastAction = 'empty'; schedule(periodMs); return; }
-        if (wait > 0) { info.lastAction = 'fresh'; schedule(wait); return; }
-        if (deps.isBusy()) { info.lastAction = 'busy'; schedule(periodMs); return; }
-        info.lastAction = 'refresh';
-        info.refreshes += 1;
-        try { await deps.refresh(); } catch (err) { /* 失败已记在各家的 last 里 */ }
-        schedule(periodMs);
-      } finally {
-        checking = false;
-      }
-    }
-
-    function onVisibility() {
-      if (deps.isVisible()) check();
-      else { clear(); info.lastAction = 'hidden'; }
-    }
-
-    return { info, start: check, onVisibility, stop: () => { info.running = false; clear(); } };
   }
-
-  let auto = null;
-  /** 只由主面板页的 shell 调用；重复调用返回同一个。 */
-  function startAutoRefresh() {
-    if (auto) return auto.info;
-    auto = createAutoRefresh({
-      minutes: AUTO_REFRESH_MINUTES,
-      now: () => Date.now(),
-      setTimer: (fn, ms) => window.setTimeout(fn, ms),
-      clearTimer: (id) => window.clearTimeout(id),
-      isVisible: () => document.visibilityState === 'visible',
-      readList: async () => readProviders(await kvRead()),
-      refresh: refreshAll,
-      isBusy: () => Boolean(batchPromise) || state.busy.size > 0,
-    });
-    if (!auto.info.running) return auto.info;
-    document.addEventListener('visibilitychange', auto.onVisibility);
-    auto.start();
-    return auto.info;
-  }
-
-  const autoRefreshInfo = () => (auto ? { ...auto.info } : { running: false, minutes: AUTO_REFRESH_MINUTES, nextAt: null, lastAction: null, refreshes: 0 });
 
   /* ---------- 删除 ---------- */
   async function removeProvider(p) {
@@ -1331,11 +1182,10 @@
   window.AgentTraceBalance = {
     mount, onShow, onHide: stopTick,
     // 以下不依赖界面，页签栏芯片与自动刷新用
-    summary, refreshAll, chipTitle, formatAmount, startAutoRefresh, autoRefreshInfo, pageId: PAGE_ID,
-    createAutoRefresh, // 只为测试暴露（注入假时钟）
+    summary, refreshAll, seen, chipTitle, formatAmount, pageId: PAGE_ID,
     // 只为测试暴露：页签栏自选与近期消耗的纯函数
     pins: { pinnedIds, applyPin, defaultPin },
-    spend: { recordPoint, recentSpend, spendText, fitKv, limits: SPEND, kvBytes: LIMITS.kvBytes },
+    spend: { recentSpend, spendText, fitKv, limits: SPEND, kvBytes: LIMITS.kvBytes },
     stripProvider,
     events: { updated: EVENT_UPDATED, refreshing: EVENT_REFRESHING, channel: SYNC_CHANNEL },
     presets: PRESETS,

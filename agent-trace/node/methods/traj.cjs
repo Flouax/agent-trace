@@ -351,6 +351,22 @@ module.exports = {
     return { engine: s.engine, engineSessionId: s.engineSessionId, cwd: s.cwd, title: s.title, startedAt: s.startedAt, endedAt: s.endedAt, stats: s.stats, warnings: s.warnings, truncated: s.truncated, ...ledgerOf(s) };
   },
 
+  /**
+   * 状态栏上下文（SPEC 附录 G）：只在伙伴聊天、且数据库精确定位到 cc/pi 转录时 visible。
+   * 不按 dirname/firstmsg/latest 猜，猜错了比不显示更糟。
+   */
+  'context/status': (p) => {
+    const sessionId = String((p && p.sessionId) || '');
+    const source = discover.sessionSource(sessionId);
+    const hide = (reason, extra) => ({ visible: false, reason, source, engine: null, contextTokens: null, ...(extra || {}) });
+    if (source !== 'bot') return hide(source ? 'NOT_COMPANION' : 'NO_SESSION');
+    const r = discover.resolveSession({ sessionId });
+    if (!r.path || !r.exact || r.via !== 'db') return hide('NO_EXACT_TRANSCRIPT', { engine: r.engine || null });
+    let s;
+    try { s = load(r.path); } catch (err) { return hide((err && err.code) || 'PARSE_FAILED', { engine: r.engine }); }
+    return { visible: true, reason: null, source, engine: r.engine, contextTokens: ledgerOf(s).contextTokens };
+  },
+
   'traj/turns': (p) => ({ turns: buildTurns(load(p && p.path)) }),
 
   'traj/timeline': (p) => buildTimeline(load(p && p.path)),

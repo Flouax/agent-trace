@@ -1,15 +1,35 @@
 {
   "schemaVersion": 3,
-  "minCindyVersion": "0.1.129",
+  "minCindyVersion": "0.1.136",
   "id": "agent-trace",
   "name": "轨迹与余额",
-  "description": "右侧栏常驻：按轮看当前对话的缓存命中、token 与费用账本（Claude Code 与 Pi），并粘贴脚本查询各供应商的余额。",
+  "description": "右侧栏常驻：按轮看当前对话的缓存命中、token 与费用账本（Claude Code 与 Pi），并粘贴脚本查询各供应商的余额（每 10 分钟自动刷新）；输入框下方状态栏显示余额，伙伴聊天里还显示当前对话的上下文占用。",
   "whenToUse": "用户想看当前对话每一轮的输入输出 token、缓存命中率、输出速率、费用与当前上下文大小，或想查看各供应商的余额时使用；入口是右侧栏的「轨迹与余额」页签。",
-  "version": "0.2.0",
-  "releaseNotes": "支持 Cindy 自带的 Pi 引擎，每轮都能看到费用。「压缩」改为点一下复制 /compact，压缩完成后面板会提示，不再需要「向任务投递消息」权限。新增像素风图标与鼠标互动动效，系统开启「减少动态效果」时自动关闭。",
+  "version": "0.3.1",
+  "releaseNotes": "新增：伙伴聊天（如 Eva）的状态栏显示当前对话的上下文占用，形如「上下文 24%」，每个对话显示自己的；普通任务里 Cindy 已有上下文圆环，所以不重复显示。已用量取自对话记录里最近一次调用（与面板的「当前上下文大小」相同，支持 Claude Code 与 Pi，Codex 不显示）；窗口大小在插件设置「上下文窗口大小（tokens）」里改，默认 1000000。数字在打开或切换到该对话时更新，点一下立即刷新；对话进行中不会自动跟着变。改动：状态栏余额只显示金额（如 $164.45），不再显示「x 分钟前」和「刷新中」，刷新时按钮变灰；查询失败或超过 60 分钟没成功更新时在金额后加「↺」提示已过期。余额自动刷新改为每 10 分钟一次，由插件后台统一计时，面板没打开也会刷新，但只在你看得到状态栏或面板时才查；任何一次整批刷新（点状态栏、点面板刷新、自动刷新）之后都从头再数 10 分钟；状态栏重新出现时如果已超过 10 分钟会立刻补刷一次。每家供应商的查询次数因此最多从每小时 2 次变为 6 次。权限：新增一个状态栏按钮、它调用的「刷新上下文占用」工具和一个设置项，更新时 Cindy 会请你批准；没有新增其他权限。最低 Cindy 版本升到 0.1.136（统一插件设置从这一版开始提供）。",
   "icon": "assets/icon.png",
   "entry": "main.js",
   "launch": "on-demand",
+  "tools": [
+    {
+      "name": "refresh_balance",
+      "description": "立即刷新「轨迹与余额」里所有供应商的余额，并返回状态栏上显示的文字。只供状态栏余额按钮调用。",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "refresh_context",
+      "description": "立即重新计算状态栏上「上下文 N%」的数字（伙伴聊天）。只供状态栏按钮调用。",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
+    }
+  ],
   "panel": {
     "title": "轨迹与余额",
     "html": "panel/app.html",
@@ -26,13 +46,19 @@
         "key": "bearer",
         "label": "供应商（Bearer 令牌）",
         "hint": "填供应商的接口域名与 API Key 或访问令牌，脚本里 Authorization: Bearer 的那一个。",
-        "inject": { "header": "Authorization", "format": "Bearer {value}" }
+        "inject": {
+          "header": "Authorization",
+          "format": "Bearer {value}"
+        }
       },
       {
         "key": "apikey",
         "label": "供应商（x-api-key）",
         "hint": "填供应商的接口域名与 API Key，脚本里放在 x-api-key 请求头的那一个。",
-        "inject": { "header": "x-api-key", "format": "{value}" }
+        "inject": {
+          "header": "x-api-key",
+          "format": "{value}"
+        }
       }
     ]
   },
@@ -41,5 +67,51 @@
     "protocol": "json-rpc-stdio",
     "lifecycle": "on-demand",
     "idleTimeoutSeconds": 180
+  },
+  "mcpApps": {
+    "ui": {
+      "resources": [],
+      "tools": {
+        "refresh_balance": {
+          "visibility": [
+            "app"
+          ]
+        },
+        "refresh_context": {
+          "visibility": [
+            "app"
+          ]
+        }
+      }
+    },
+    "host": {
+      "contributions": [
+        {
+          "id": "balance",
+          "title": "余额",
+          "position": "statusbar",
+          "kind": "button",
+          "tool": "refresh_balance"
+        },
+        {
+          "id": "context",
+          "title": "上下文",
+          "position": "statusbar",
+          "kind": "button",
+          "tool": "refresh_context"
+        }
+      ],
+      "settings": [
+        {
+          "id": "context_window",
+          "title": "上下文窗口大小（tokens）",
+          "description": "状态栏「上下文 N%」的分母。填你在 Cindy 里为对话设置的上下文窗口，例如 1000000（1M）或 200000（200K）。",
+          "type": "number",
+          "default": 1000000,
+          "min": 1000,
+          "max": 10000000
+        }
+      ]
+    }
   }
 }

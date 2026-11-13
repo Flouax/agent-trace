@@ -122,11 +122,13 @@
         if (m && m.type === 'balance-updated' && m.source !== balance.pageId) update();
       };
     }
-    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') update(); });
+    // 面板变得可见：告诉电子脑一声，满 10 分钟没刷就补刷（定时器在电子脑里，见 SPEC 附录 H）
+    const reportSeen = () => { if (balance.seen) balance.seen(); };
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { update(); reportSeen(); } });
     let resizeTimer = 0;
     window.addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(update, 150); });
-    // 先画出缓存，再启动定时自动刷新（只在主面板页启动；周期见 balance.js 的 AUTO_REFRESH_MINUTES）
-    update().then(() => { if (balance.startAutoRefresh) balance.startAutoRefresh(); }).catch(() => {});
+    // 先画出缓存，再报告可见（只在主面板页；设置页不报告）
+    update().then(() => { if (document.visibilityState === 'visible') reportSeen(); }).catch(() => {});
   }
 
   const TAB_ICONS = { traj: 'trace', balance: 'wallet' };
